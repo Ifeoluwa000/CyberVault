@@ -1,18 +1,17 @@
 import tkinter as tk
-from tkinter import simpledialog, messagebox
+from tkinter import simpledialog, messagebox, ttk
 from cryptography.fernet import Fernet
 from crypto_utils import generate_key
 import vault
 import auth
 import re
+import random
+import string
 
 # -------------------------------
 # Password Strength Checker
 # -------------------------------
 def password_strength(password):
-    """
-    Returns a score and message for password strength
-    """
     score = 0
     if len(password) >= 8:
         score += 1
@@ -35,7 +34,15 @@ def password_strength(password):
     return score, msg
 
 # -------------------------------
-# Step 1: Ask for master password
+# Strong Password Generator
+# -------------------------------
+def generate_strong_password(length=12):
+    all_chars = string.ascii_letters + string.digits + "!@#$%^&*()"
+    password = "".join(random.choice(all_chars) for _ in range(length))
+    return password
+
+# -------------------------------
+# Master Password Login
 # -------------------------------
 master_password = simpledialog.askstring(
     "Master Password",
@@ -52,66 +59,101 @@ if not auth.verify_master(master_password):
     exit()
 
 # -------------------------------
-# Step 2: Setup encryption key
+# Setup Encryption
 # -------------------------------
 key = generate_key(master_password)
 fernet = Fernet(key)
-
-# -------------------------------
-# Step 3: Load vault data
-# -------------------------------
 vault_data = vault.load_vault(fernet)
 
 # -------------------------------
-# Step 4: Create main window
+# Main Window
 # -------------------------------
 root = tk.Tk()
 root.title("CipherVault Dashboard")
-root.geometry("450x450")
+root.geometry("550x450")
 
-# Listbox to show stored accounts
-account_listbox = tk.Listbox(root, width=50)
-account_listbox.pack(pady=20)
+# Treeview for accounts
+account_tree = ttk.Treeview(root, columns=("Account", "Strength"), show="headings")
+account_tree.heading("Account", text="Account")
+account_tree.heading("Strength", text="Strength")
+account_tree.pack(pady=20, fill=tk.X)
+
+# Color tag configuration
+account_tree.tag_configure("Weak", foreground="red")
+account_tree.tag_configure("Medium", foreground="orange")
+account_tree.tag_configure("Strong", foreground="green")
 
 # -------------------------------
-# Step 5: Functions
+# Functions
 # -------------------------------
 def refresh_list():
-    account_listbox.delete(0, tk.END)
-    for account in vault_data:
-        account_listbox.insert(tk.END, account)
+    for i in account_tree.get_children():
+        account_tree.delete(i)
+    for account, data in vault_data.items():
+        _, strength = password_strength(data["password"])
+        account_tree.insert("", "end", values=(account, strength), tags=(strength,))
 
 def add_account():
-    name = simpledialog.askstring("Account Name", "Enter Account Name:")
-    username = simpledialog.askstring("Username/Email", "Enter Username/Email:")
-    password = simpledialog.askstring("Password", "Enter Password:")
+    popup = tk.Toplevel(root)
+    popup.title("Add Account")
+    popup.geometry("300x200")
+    popup.grab_set()  # Make it modal
 
-    if not (name and username and password):
-        messagebox.showerror("Error", "All fields are required")
-        return
+    tk.Label(popup, text="Account Name:").pack(pady=5)
+    entry_name = tk.Entry(popup)
+    entry_name.pack()
 
-    # Check password strength
-    score, strength = password_strength(password)
-    if strength == "Weak":
-        proceed = messagebox.askyesno(
-            "Weak Password",
-            f"This password is weak. Do you still want to use it?"
-        )
-        if not proceed:
+    tk.Label(popup, text="Username/Email:").pack(pady=5)
+    entry_username = tk.Entry(popup)
+    entry_username.pack()
+
+    tk.Label(popup, text="Password:").pack(pady=5)
+    entry_password = tk.Entry(popup, show="*")
+    entry_password.pack()
+
+    def submit():
+        name = entry_name.get().strip()
+        username = entry_username.get().strip()
+        password = entry_password.get().strip()
+
+        if not (name and username and password):
+            messagebox.showerror("Error", "All fields are required", parent=popup)
             return
 
-    vault_data[name] = {"username": username, "password": password}
-    vault.save_vault(vault_data, fernet)
-    refresh_list()
-    messagebox.showinfo("Success", f"{name} added! Password strength: {strength}")
+        # Password strength check
+        score, strength = password_strength(password)
+        if strength == "Weak":
+            proceed = messagebox.askyesno(
+                "Weak Password",
+                "This password is weak.\nDo you want a recommended strong password?",
+                parent=popup
+            )
+            if proceed:
+                password = generate_strong_password()
+                messagebox.showinfo("Recommended Password", f"Use this password: {password}", parent=popup)
+                accept = messagebox.askyesno(
+                    "Use Suggested Password?",
+                    "Do you want to use the suggested password?",
+                    parent=popup
+                )
+                if not accept:
+                    return  # Let user edit manually
+
+        vault_data[name] = {"username": username, "password": password}
+        vault.save_vault(vault_data, fernet)
+        refresh_list()
+        messagebox.showinfo("Success", f"{name} added! Password strength: {strength}", parent=popup)
+        popup.destroy()
+
+    tk.Button(popup, text="Submit", command=submit).pack(pady=10)
+
 
 def view_account():
-    selected = account_listbox.curselection()
+    selected = account_tree.selection()
     if not selected:
         messagebox.showerror("Error", "No account selected")
         return
-
-    name = account_listbox.get(selected[0])
+    name = account_tree.item(selected[0])["values"][0]
     data = vault_data[name]
     messagebox.showinfo(
         name,
@@ -119,12 +161,11 @@ def view_account():
     )
 
 def delete_account():
-    selected = account_listbox.curselection()
+    selected = account_tree.selection()
     if not selected:
         messagebox.showerror("Error", "No account selected")
         return
-
-    name = account_listbox.get(selected[0])
+    name = account_tree.item(selected[0])["values"][0]
     confirm = messagebox.askyesno("Confirm Delete", f"Delete {name}?")
     if confirm:
         vault_data.pop(name)
@@ -133,12 +174,14 @@ def delete_account():
         messagebox.showinfo("Deleted", f"{name} has been deleted")
 
 # -------------------------------
-# Step 6: Buttons
+# Buttons
 # -------------------------------
-tk.Button(root, text="Add Account", width=20, command=add_account).pack(pady=5)
-tk.Button(root, text="View Account", width=20, command=view_account).pack(pady=5)
-tk.Button(root, text="Delete Account", width=20, command=delete_account).pack(pady=5)
+tk.Button(root, text="Add Account", width=25, command=add_account).pack(pady=5)
+tk.Button(root, text="View Account", width=25, command=view_account).pack(pady=5)
+tk.Button(root, text="Delete Account", width=25, command=delete_account).pack(pady=5)
 
-# Initial population
+# -------------------------------
+# Initialize
+# -------------------------------
 refresh_list()
 root.mainloop()
