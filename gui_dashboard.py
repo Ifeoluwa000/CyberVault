@@ -1,14 +1,12 @@
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
 import ttkbootstrap as tb
-from ttkbootstrap.constants import *
 from cryptography.fernet import Fernet
 import vault
 import auth
 from crypto_utils import generate_key
 import re
 import pandas as pd
-import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -149,19 +147,36 @@ style = tb.Style(theme=actual_theme)
 # ===============================
 root.withdraw()
 
+
 def ask_master_password():
     popup = tb.Toplevel(root)
-    popup.title("CyberVault")
-    popup.geometry("400x280")
+    # Check if we are in "Setup Mode" or "Login Mode"
+    is_new_user = not auth.master_exists()
+
+    popup.title("CyberVault Setup" if is_new_user else "CyberVault Login")
+    popup.geometry("450x320")  # Slightly taller to fit the hint
     popup.resizable(False, False)
     popup.grab_set()
+
+    # --- DYNAMIC TEXT SELECTION ---
+    title_text = "Create Master Password" if is_new_user else "Enter Master Password"
+    subtitle_text = "Choose a strong password to encrypt your vault." if is_new_user else "(Master password cannot be recovered)"
+    button_text = "Create Vault" if is_new_user else "Unlock Vault"
+    button_style = "success" if is_new_user else "primary"
 
     # Title label
     tb.Label(
         popup,
-        text="Enter Master Password",
+        text=title_text,
         font=("Inter", 14, "bold")
-    ).pack(pady=15)
+    ).pack(pady=(20, 5))
+
+    # Subtitle/Hint label
+    tb.Label(
+        popup,
+        text=subtitle_text,
+        font=("Inter", 9, "italic")
+    ).pack(pady=(0, 15))
 
     # Entry for master password
     master_var = tk.StringVar()
@@ -169,13 +184,10 @@ def ask_master_password():
         popup,
         textvariable=master_var,
         show="*",
-        font=("JetBrains Mono", 10)
+        font=("JetBrains Mono", 11)
     )
-    master_entry.pack(fill="x", padx=20, pady=10)
+    master_entry.pack(fill="x", padx=30, pady=10)
     master_entry.focus_set()
-
-    # Bind Enter key to submit
-    popup.bind("<Return>", lambda e: submit_master())
 
     # Eye toggle for password visibility
     def toggle_password():
@@ -191,28 +203,28 @@ def ask_master_password():
         text="👁️",
         width=3,
         command=toggle_password,
-        bootstyle="link"  # removes background completely
+        bootstyle="link"
     )
     eye_button.place(in_=master_entry, relx=1.0, x=-5, rely=0.5, anchor="e")
-
-    # Optional hint label
-    tb.Label(
-        popup,
-        text="(Master password cannot be recovered)",
-        font=("Inter", 9, "italic")
-    ).pack(anchor="w", padx=20)
 
     # Submit button function
     def submit_master():
         pwd = master_var.get()
         if not pwd:
-            messagebox.showerror("Access Denied", "Master password required.", parent=popup)
-            return
-        if not auth.verify_master(pwd):
-            messagebox.showerror("Access Denied", "Incorrect master password.", parent=popup)
+            messagebox.showerror("Error", "Password cannot be empty.", parent=popup)
             return
 
-        # Generate fernet key & load vault
+        if is_new_user:
+            # First time setup logic
+            auth.create_master(pwd)
+            messagebox.showinfo("Success", "Vault initialized successfully!", parent=popup)
+        else:
+            # Standard login logic
+            if not auth.verify_master(pwd):
+                messagebox.showerror("Access Denied", "Incorrect master password.", parent=popup)
+                return
+
+        # Common logic: Generate key and enter app
         global fernet, vault_data
         key = generate_key(pwd)
         fernet = Fernet(key)
@@ -224,31 +236,24 @@ def ask_master_password():
 
         popup.destroy()
         root.deiconify()
-        refresh_home()  # ensure table is populated after unlocking
+        if 'refresh_home' in globals():  # Safety check
+            refresh_home()
 
-    # Buttons frame
-    btn_frame = tb.Frame(popup)
-    btn_frame.pack(pady=15)
-
+    # Submit Button
     tb.Button(
-        btn_frame,
-        text="Unlock Vault",
-        bootstyle="success",
-        width=16,
+        popup,
+        text=button_text,
+        bootstyle=button_style,
+        width=20,
         command=submit_master
-    ).pack(side="left", padx=6)
+    ).pack(pady=20)
 
-    tb.Button(
-        btn_frame,
-        text="Cancel",
-        bootstyle="secondary",
-        width=12,
-        command=root.destroy
-    ).pack(side="left", padx=6)
+    # Bind Enter key to submit
+    popup.bind("<Return>", lambda e: submit_master())
 
-# Call the function to ask for master password
+
+# Call the function
 ask_master_password()
-
 
 
 # -------------------

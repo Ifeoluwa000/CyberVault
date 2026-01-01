@@ -1,7 +1,0 @@
-{
-    "theme": "darkly",
-    "min_length": 5,
-    "require_number": false,
-    "require_upper": false,
-    "require_special": false
-}
