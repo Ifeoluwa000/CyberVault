@@ -140,7 +140,7 @@ else:
 
 # 4. Start the window with the VALID theme name
 root = tb.Window(themename=actual_theme)
-root.title("CyberVault")
+root.title("CyberVault - Secure Password Manager")
 root.geometry("950x600")
 
 style = tb.Style(theme=actual_theme)
@@ -151,7 +151,7 @@ root.withdraw()
 
 def ask_master_password():
     popup = tb.Toplevel(root)
-    popup.title("Master Password")
+    popup.title("CyberVault")
     popup.geometry("400x280")
     popup.resizable(False, False)
     popup.grab_set()
@@ -794,13 +794,13 @@ tb.Label(
 tb.Label(
     empty_state_frame,
     text="Welcome to CyberVault",
-    font=("Segoe UI", 14, "bold")
+    font=("Segoe UI", 25, "bold")
 ).pack(pady=5)
 
 tb.Label(
     empty_state_frame,
     text="Your security starts here. Add your first account to begin.",
-    font=("Segoe UI", 10)
+    font=("Segoe UI", 18)
 ).pack(pady=(0, 20))
 
 tb.Button(
