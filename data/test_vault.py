@@ -1,6 +1,6 @@
-from crypto_utils import generate_key
+from src.crypto_utils import generate_key
 from cryptography.fernet import Fernet
-import vault
+from src import vault
 
 master = "TestPassword123"
 

@@ -3,8 +3,8 @@ from tkinter import messagebox
 import ttkbootstrap as tb
 from cryptography.fernet import Fernet
 import vault
-import auth
-from crypto_utils import generate_key
+from src import auth
+from src.crypto_utils import generate_key
 import re
 import pandas as pd
 import seaborn as sns
